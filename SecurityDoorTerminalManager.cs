@@ -10,6 +10,7 @@ using Localization;
 using GTFO.API;
 using ExtraObjectiveSetup.ExtendedWardenEvents;
 using EOSExt.SecurityDoorTerminal.Definition;
+using AIGraph;
 
 namespace EOSExt.SecurityDoorTerminal
 {
@@ -23,18 +24,31 @@ namespace EOSExt.SecurityDoorTerminal
 
         private SecDoorTerminal BuildSDT_Instantiation(SecurityDoorTerminalDefinition def)
         {
-            var (dimensionIndex, layer, localIndex) = def.GlobalZoneIndexTuple();
-
-            if (!Builder.CurrentFloor.TryGetZoneByLocalIndex(dimensionIndex, layer, localIndex, out var targetZone) || targetZone == null)
+            LG_SecurityDoor door = null;
+            if(def.FCDoorWorldEventObjectFilter != null && def.FCDoorWorldEventObjectFilter.Length > 0)
             {
-                EOSLogger.Error($"SecDoorTerminal: Cannot find target zone {def.GlobalZoneIndexTuple()}");
-                return null;
+                door = ExtraDoorUtils.GetFCDoor(def.FCDoorWorldEventObjectFilter);
+                if(door == null)
+                {
+                    EOSLogger.Error($"SecDoorTerminal: cannot find ExtraDoor with name '{def.FCDoorWorldEventObjectFilter}'");
+                    return null;
+                }
             }
-
-            if (!TryGetZoneEntranceSecDoor(targetZone, out var door) || door == null)
+            else
             {
-                EOSLogger.Error($"SecDoorTerminal: Cannot find spawned sec-door for zone {def.GlobalZoneIndexTuple()}");
-                return null;
+                var (dimensionIndex, layer, localIndex) = def.GlobalZoneIndexTuple();
+
+                if (!Builder.CurrentFloor.TryGetZoneByLocalIndex(dimensionIndex, layer, localIndex, out var targetZone) || targetZone == null)
+                {
+                    EOSLogger.Error($"SecDoorTerminal: Cannot find target zone {def.GlobalZoneIndexTuple()}");
+                    return null;
+                }
+
+                if (!TryGetZoneEntranceSecDoor(targetZone, out door) || door == null)
+                {
+                    EOSLogger.Error($"SecDoorTerminal: Cannot find spawned sec-door for zone {def.GlobalZoneIndexTuple()}");
+                    return null;
+                }
             }
 
             var sdt = SecDoorTerminal.Place(door, new TerminalStartStateData()
@@ -45,11 +59,12 @@ namespace EOSExt.SecurityDoorTerminal
             sdt.BioscanScanSolvedBehaviour = def.StateSettings.OnPuzzleSolved;
             if (sdt == null)
             {
-                EOSLogger.Error("Build failed: Can only attach SDT to regular security door");
+                EOSLogger.Error("SecDoorTerminal: Build failed - Can only attach SDT to regular security door");
                 return null;
             }
 
-            targetZone.m_sourceGate.m_linksFrom.m_zone.TerminalsSpawnedInZone.Add(sdt.ComputerTerminal);
+            door.Gate.m_linksFrom.m_zone.TerminalsSpawnedInZone.Add(sdt.ComputerTerminal);
+            
             sdt.BioscanScanSolvedBehaviour = def.StateSettings.OnPuzzleSolved;
             def.TerminalSettings.LocalLogFiles.ForEach(log => sdt.ComputerTerminal.AddLocalLog(log, true));
 
@@ -188,7 +203,10 @@ namespace EOSExt.SecurityDoorTerminal
             foreach (var def in definitions[RundownManager.ActiveExpedition.LevelLayoutData].Definitions)
             {
                 var sdt = BuildSDT_Instantiation(def);
-                levelSDTs.Add((sdt, def));
+                if(sdt != null)
+                {
+                    levelSDTs.Add((sdt, def));
+                }
             }
         }
 
