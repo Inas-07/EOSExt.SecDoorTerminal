@@ -18,7 +18,7 @@ namespace EOSExt.SecurityDoorTerminal
     {
         public const string AUTHOR = "Inas";
         public const string PLUGIN_NAME = "EOSExt.SecurityDoorTerminal";
-        public const string VERSION = "1.1.0";
+        public const string VERSION = "1.1.2";
 
         public override void Load()
         {
